@@ -44,6 +44,7 @@ Other Features/Improvement of this Kernel:
 3. F2FS realtime discard enabled for better TRIM the flash.
 4. Support CANBus and USB CAN adapter (like CANable).
 5. Support LZ4, LZ4HC, ZSTD compression algorithms for ZRAM.
+6. Support [DroidSpaces](https://github.com/ravindu644/Droidspaces-OSS) (Linux container runtime). Its kernel requirements are enabled in munch's defconfig and are merged into every device defconfig by `scripts/update_defconfig` (fragment: `arch/arm64/configs/vendor/xiaomi/droidspaces.config`).
 
 ## 中文
 该repo (`android15-lineage22-mod` 分支)主要基于[Lineage OS 22.1 xiaomi sm8250 kernel source](https://github.com/LineageOS/android_kernel_xiaomi_sm8250)。
@@ -89,6 +90,7 @@ Release里的编译好的内核成品由`android15-lineage22-mod`分支编译，
 3. F2FS开启了realtime discard以更好的TRIM闪存
 4. 支持 CANBus 和 USB CAN （如 CANable）适配器（一些折腾嵌入式的可能会喜欢这个）
 5. zRAM 支持 LZ4、LZ4HC、ZSTD 压缩算法
+6. 支持 [DroidSpaces](https://github.com/ravindu644/Droidspaces-OSS)（Linux 容器运行时）。其内核配置要求已加入 munch 的 defconfig，并会由 `scripts/update_defconfig` 合并进所有设备的 defconfig（配置片段：`arch/arm64/configs/vendor/xiaomi/droidspaces.config`）。
 
 # How to build
 1. Prepair the basic build environment. 

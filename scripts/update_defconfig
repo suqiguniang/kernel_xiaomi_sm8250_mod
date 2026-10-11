@@ -64,7 +64,8 @@ run_merge_config() {
 		-O "${out_dir}" \
 		"${krnl_config_dir}/../${soc}-perf_defconfig" \
 		"${krnl_config_dir}/sm8250-common.config" \
-		"${krnl_config_dir}/${device}.config")
+		"${krnl_config_dir}/${device}.config" \
+		"${krnl_config_dir}/droidspaces.config")
 
 	case "$ret" in
 	*"error"* | *"ERROR"* | *"Exit"*)
