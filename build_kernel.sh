@@ -75,8 +75,15 @@ if [ "$ENABLE_KSU" -eq 1 ]; then
     echo "==========================================="
     echo " [*] Initializing KernelSU (ReSukiSU) Setup"
     echo "==========================================="
-    echo "[*] Downloading and running ReSukiSU remote setup script..."
-    curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
+    # ReSukiSU/BakaSU "main" suspended the SuSFS build ("Please wait susfs
+    # update."), and every commit after b2ac2fc87 already expects the newer
+    # SuSFS API (susfs_set_current_proc_no_su and friends) that the SuSFS
+    # v2.2.0 integrated in this tree does not provide. Pin the last commit
+    # that matches this tree's SuSFS, inline hooks and 4.19 support.
+    # Override with KSU_VERSION=<tag|commit> to use another version.
+    KSU_VERSION="${KSU_VERSION:-b2ac2fc8703ce9f5226e2a38a59f8b72f8a3005c}"
+    echo "[*] Downloading and running ReSukiSU remote setup script (${KSU_VERSION})..."
+    curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s -- "${KSU_VERSION}"
     echo "[+] KernelSU setup finished."
 fi
 
