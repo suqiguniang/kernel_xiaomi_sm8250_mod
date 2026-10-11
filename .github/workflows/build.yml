@@ -1,32 +1,14 @@
-name: Build Kernel
+name: Build Kernel (munch)
 
+# munch = Redmi K40S / POCO F4 — the only build target of this fork.
 on:
   workflow_dispatch:
     inputs:
-      device:
-        description: 'Target Device Code (设备代号)'
-        required: true
-        default: 'lmi'
-        type: choice
-        options:
-          - alioth
-          - apollo
-          - cas
-          - cmi
-          - dagu
-          - elish
-          - enuma
-          - lmi
-          - munch
-          - pipa
-          - psyche
-          - thyme
-          - umi
       ksu:
         description: 'Enable KernelSU (ReSukiSU)'
         required: true
         type: boolean
-        default: false
+        default: true
       target_os:
         description: 'Target OS (目标系统)'
         required: true
@@ -37,11 +19,18 @@ on:
           - miui
           - both
 
+# Needed to create the GitHub release from this workflow.
+permissions:
+  contents: write
+
+env:
+  DEVICE: munch
+
 jobs:
   build-kernel:
-    name: Build ${{ github.event.inputs.device }} | KSU:${{ github.event.inputs.ksu }} | OS:${{ github.event.inputs.target_os }}
+    name: Build munch | KSU:${{ github.event.inputs.ksu }} | OS:${{ github.event.inputs.target_os }}
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v7
@@ -56,14 +45,14 @@ jobs:
           lib32readline-dev lib32z1-dev liblz4-tool \
           libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync \
           schedtool squashfs-tools xsltproc zip zlib1g-dev python3
-          
+
     - name: Cache ccache
       uses: actions/cache@v6
       with:
         path: ~/.cache/ccache_mikernel
-        key: ${{ runner.os }}-kernel-ccache-${{ github.event.inputs.device }}-${{ github.run_id }}
+        key: ${{ runner.os }}-kernel-ccache-munch-${{ github.run_id }}
         restore-keys: |
-          ${{ runner.os }}-kernel-ccache-${{ github.event.inputs.device }}-
+          ${{ runner.os }}-kernel-ccache-munch-
           ${{ runner.os }}-kernel-ccache-
 
     - name: Setup zyc-clang 16 Toolchain
@@ -76,23 +65,80 @@ jobs:
     - name: Run Build Script
       run: |
         chmod +x build_kernel.sh
-        
-        ARGS="${{ github.event.inputs.device }}"
-        
+
+        ARGS="${DEVICE}"
+
         if [ "${{ github.event.inputs.ksu }}" == "true" ]; then
           ARGS="$ARGS ksu"
         fi
-        
+
         if [ "${{ github.event.inputs.target_os }}" != "both" ]; then
           ARGS="$ARGS ${{ github.event.inputs.target_os }}"
         fi
-        
+
         echo "Executing command: ./build_kernel.sh $ARGS"
         ./build_kernel.sh $ARGS
+
+    - name: Verify DroidSpaces kernel configs
+      run: |
+        status=0
+        for img in out_aosp/arch/arm64/boot/Image out_miui/arch/arm64/boot/Image; do
+          [ -f "$img" ] || continue
+          echo "== Verifying DroidSpaces options in $img"
+          cfg=$(mktemp)
+          scripts/extract-ikconfig "$img" > "$cfg" || {
+            echo "ERROR: could not extract kernel config from $img"
+            exit 1
+          }
+          while read -r line; do
+            case "$line" in
+              CONFIG_*=y)
+                grep -qx -- "$line" "$cfg" || { echo "MISSING: $line"; status=1; }
+                ;;
+            esac
+          done < arch/arm64/configs/vendor/xiaomi/droidspaces.config
+        done
+        if [ "$status" -ne 0 ]; then
+          echo "FAILED: the built kernel does not contain all DroidSpaces options"
+          exit 1
+        fi
+        echo "OK: all DroidSpaces options are present in the built kernel"
 
     - name: Upload Flashable ZIP
       uses: actions/upload-artifact@v7
       with:
-        name: APTKernel-${{ github.event.inputs.device }}-${{ github.event.inputs.target_os }}-${{ github.run_id }}
+        name: APTKernel-munch-${{ github.event.inputs.target_os }}-${{ github.run_id }}
         path: APTKernel_*.zip
         compression-level: 0 # 已经被 zip 压缩过，无需再二次压缩
+
+    - name: Publish release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        tag="munch-$(date -u +'%Y%m%d-%H%M%S')"
+        cat > release-notes.md <<'EOF'
+        ## munch — Redmi K40S / POCO F4
+
+        Flash the AnyKernel3 zip that matches your ROM (do NOT flash dtbo.img):
+
+        - `APTKernel_AOSP_*` → AOSP-based ROMs (LineageOS, crDroid, PixelOS, ...)
+        - `APTKernel_MIUI_*` → MIUI / HyperOS
+
+        ### DroidSpaces support
+        This build includes full [DroidSpaces](https://github.com/ravindu644/Droidspaces-OSS)
+        kernel support (Linux container runtime): PID/UTS/IPC/NET namespaces, cgroup controllers
+        with memory/CPU/PID limits, seccomp filter, devtmpfs, overlayfs, iptables/nftables NAT
+        (IPv4 + IPv6), macvlan and user namespaces. CI verifies every required option against the
+        built Image before publishing.
+
+        Install the DroidSpaces app, then run `su -c droidspaces check` to confirm.
+
+        ### Notes
+        - KernelSU variant (ReSukiSU + SuSFS): install the ReSukiSU manager APK.
+        - SuSFS: disable "HIDE SUS MOUNTS FOR ALL PROCESSES" or containers will not boot.
+        - Keep your stock / ROM dtbo; this zip does not touch it.
+        EOF
+        gh release create "$tag" \
+          --title "munch (Redmi K40S) — $tag" \
+          --notes-file release-notes.md \
+          APTKernel_*.zip
