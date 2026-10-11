@@ -3925,6 +3925,18 @@ static int cgroup_add_file(struct cgroup_subsys_state *css, struct cgroup *cgrp,
 		spin_unlock_irq(&cgroup_file_kn_lock);
 	}
 
+	/*
+	 * Expose the "<subsys>.<file>" alias on hierarchies mounted with
+	 * noprefix, so container runtimes (Droidspaces/LXC) can find the
+	 * prefixed file names.
+	 */
+	if (cft->ss && (cgrp->root->flags & CGRP_ROOT_NOPREFIX) &&
+	    !(cft->flags & CFTYPE_NO_PREFIX)) {
+		snprintf(name, CGROUP_FILE_NAME_MAX, "%s.%s",
+			 cft->ss->name, cft->name);
+		kernfs_create_link(cgrp->kn, name, kn);
+	}
+
 	return 0;
 }
 
