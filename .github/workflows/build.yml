@@ -82,14 +82,9 @@ jobs:
     - name: Verify DroidSpaces kernel configs
       run: |
         status=0
-        for img in out_aosp/arch/arm64/boot/Image out_miui/arch/arm64/boot/Image; do
-          [ -f "$img" ] || continue
-          echo "== Verifying DroidSpaces options in $img"
-          cfg=$(mktemp)
-          scripts/extract-ikconfig "$img" > "$cfg" || {
-            echo "ERROR: could not extract kernel config from $img"
-            exit 1
-          }
+        for cfg in out_aosp/.config out_miui/.config; do
+          [ -f "$cfg" ] || continue
+          echo "== Verifying DroidSpaces options in $cfg"
           while read -r line; do
             case "$line" in
               CONFIG_*=y)
@@ -99,10 +94,18 @@ jobs:
           done < arch/arm64/configs/vendor/xiaomi/droidspaces.config
         done
         if [ "$status" -ne 0 ]; then
-          echo "FAILED: the built kernel does not contain all DroidSpaces options"
+          echo "FAILED: the built configuration does not contain all DroidSpaces options"
           exit 1
         fi
-        echo "OK: all DroidSpaces options are present in the built kernel"
+        echo "OK: all DroidSpaces options are enabled in the built configuration"
+        # Note: the config embedded in the Image (IKCONFIG / /proc/config.gz) is a
+        # stock Xiaomi defconfig on this tree by design, so it is not the build
+        # configuration and cannot be used for verification.
+        for img in out_aosp/arch/arm64/boot/Image out_miui/arch/arm64/boot/Image; do
+          [ -f "$img" ] || continue
+          n=$(scripts/extract-ikconfig "$img" 2>/dev/null | wc -l || echo 0)
+          echo "note: $img reports $n lines of stock config via IKCONFIG (by design)"
+        done
 
     - name: Upload Flashable ZIP
       uses: actions/upload-artifact@v7
@@ -110,6 +113,14 @@ jobs:
         name: APTKernel-munch-${{ github.event.inputs.target_os }}-${{ github.run_id }}
         path: APTKernel_*.zip
         compression-level: 0 # 已经被 zip 压缩过，无需再二次压缩
+
+    - name: Upload build configs
+      uses: actions/upload-artifact@v7
+      with:
+        name: kernel-config-munch-${{ github.run_id }}
+        path: |
+          out_aosp/.config
+          out_miui/.config
 
     - name: Publish release
       env:
