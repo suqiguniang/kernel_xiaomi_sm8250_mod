@@ -107,6 +107,38 @@ jobs:
           echo "note: $img reports $n lines of stock config via IKCONFIG (by design)"
         done
 
+    - name: Verify flashable ZIP contents
+      run: |
+        # The AnyKernel3 kona anykernel.sh must point at the kernel this build
+        # staged; if it does not, flashing silently keeps the OLD kernel.
+        status=0
+        for z in APTKernel_*.zip; do
+          [ -f "$z" ] || continue
+          echo "== Inspecting $z"
+          if ! unzip -l "$z" | grep -qE 'kernels/[a-z]+/Image'; then
+            echo "ERROR: $z does not contain kernels/<os>/Image"
+            status=1
+          fi
+          if unzip -p "$z" anykernel.sh | grep -qE 'mv \$home/kernels/Image'; then
+            echo "ERROR: $z anykernel.sh still reads kernels/Image (would flash the old kernel)"
+            status=1
+          fi
+          unzip -p "$z" anykernel.sh | grep -E 'mv \$home/kernels/' || true
+          # confirm the staged Image matches the freshly built one
+          os=$(unzip -p "$z" anykernel.sh | sed -nE 's#.*kernels/([a-z]+)/Image.*#\1#p' | head -1)
+          [ -n "$os" ] || { echo "ERROR: could not determine OS variant in $z"; status=1; continue; }
+          rm -rf /tmp/zipchk && mkdir -p /tmp/zipchk
+          unzip -o -q "$z" "kernels/$os/Image" -d /tmp/zipchk
+          if ! cmp -s "/tmp/zipchk/kernels/$os/Image" "out_$os/arch/arm64/boot/Image"; then
+            echo "ERROR: $z contains a kernel that does not match out_$os/arch/arm64/boot/Image"
+            status=1
+          else
+            echo "OK: $z kernel matches the freshly built out_$os Image"
+          fi
+        done
+        [ "$status" -eq 0 ] || { echo "FAILED: flashable zip contents are wrong"; exit 1; }
+        echo "OK: flashable zips carry the freshly built kernel"
+
     - name: Upload Flashable ZIP
       uses: actions/upload-artifact@v7
       with:

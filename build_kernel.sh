@@ -283,6 +283,19 @@ build_target() {
         if [ -f "${OUT_DIR}/arch/arm64/boot/dtbo.img" ]; then
             cp "${OUT_DIR}/arch/arm64/boot/dtbo.img" "anykernel/kernels/${OS_TYPE}/"
         fi
+
+        # The AnyKernel3 kona anykernel.sh expects the kernel at kernels/Image,
+        # but this script stages it under kernels/<os>/. Without this rewrite the
+        # "mv kernels/Image Image" inside anykernel.sh fails silently and
+        # flash_boot() re-packs the OLD kernel from the boot partition, so the
+        # flashed kernel never actually changes. Point it at the real path.
+        sed -i "s#\$home/kernels/Image#\$home/kernels/${OS_TYPE}/Image#" anykernel/anykernel.sh
+        sed -i "s#\$home/kernels/dtb#\$home/kernels/${OS_TYPE}/dtb#" anykernel/anykernel.sh
+        if ! grep -q "kernels/${OS_TYPE}/Image" anykernel/anykernel.sh; then
+            echo "[-] FATAL: failed to point anykernel.sh at kernels/${OS_TYPE}/Image;"
+            echo "[-] the produced zip would silently keep the old kernel. Aborting."
+            exit 1
+        fi
         
         # 确定 ZIP 文件名
         local KSU_ZIP_STR="NoKernelSU"
