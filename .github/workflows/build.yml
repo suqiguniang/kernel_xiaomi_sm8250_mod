@@ -32,6 +32,14 @@ env:
   KSU_MANAGER_APKS: >-
     ReSukiSU_v4.2.0-rc1_35061-arm64-v8a-release.apk
     ReSukiSU_v4.2.0-rc1_35061-universal-release.apk
+  # DroidSpaces container runtime. The APK is the in-app manager; the tar.gz
+  # ships the standalone `droidspaces` CLI (aarch64/…) and the .deb is the
+  # arm64 Debian package, both handy from a shell.
+  DROIDSPACES_TAG: v6.6.0
+  DROIDSPACES_APK: Droidspaces-universal-v6.6.0-cff50fa.apk
+  DROIDSPACES_EXTRAS: >-
+    droidspaces-v6.6.0-cff50fa.tar.gz
+    droidspaces_6.6.0-1_arm64.deb
 
 jobs:
   build-kernel:
@@ -176,6 +184,20 @@ jobs:
           echo "OK: $f ($(stat -c %s "$f") bytes)"
         done
 
+    - name: Fetch DroidSpaces app and CLI
+      run: |
+        mkdir -p apk
+        base="https://github.com/ravindu644/Droidspaces-OSS/releases/download/${DROIDSPACES_TAG}"
+        curl -fL --retry 5 --retry-all-errors -o "apk/$DROIDSPACES_APK" "$base/$DROIDSPACES_APK"
+        for f in $DROIDSPACES_EXTRAS; do
+          curl -fL --retry 5 --retry-all-errors -o "apk/$f" "$base/$f"
+        done
+        unzip -l "apk/$DROIDSPACES_APK" | grep -q AndroidManifest.xml || {
+          echo "ERROR: $DROIDSPACES_APK is not a valid APK"; exit 1; }
+        for f in apk/*.apk apk/*.tar.gz; do
+          echo "OK: $f ($(stat -c %s "$f") bytes)"
+        done
+
     - name: Publish release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -189,11 +211,19 @@ jobs:
         - `APTKernel_AOSP_*` → AOSP-based ROMs (LineageOS, crDroid, PixelOS, ...)
         - `APTKernel_MIUI_*` → MIUI / HyperOS
 
-        ### ReSukiSU manager app (included)
-        The APKs attached to this release match the KernelSU driver in this
-        build (`ReSukiSU_v4.2.0-rc1_35061`). Install the **arm64-v8a** one; the
-        universal one is a fallback. Other manager versions (rc2/rc3) use a
-        different kernel UAPI and will show "Kernel update required".
+        ### Apps and tools (included)
+
+        | File | What it is |
+        |------|------------|
+        | `ReSukiSU_v4.2.0-rc1_35061-arm64-v8a-release.apk` | KernelSU manager for this kernel — install this one |
+        | `ReSukiSU_v4.2.0-rc1_35061-universal-release.apk` | Same manager, universal fallback |
+        | `Droidspaces-universal-v6.6.0-cff50fa.apk` | DroidSpaces container runtime app |
+        | `droidspaces-v6.6.0-cff50fa.tar.gz` | DroidSpaces CLI (aarch64/… binaries) |
+        | `droidspaces_6.6.0-1_arm64.deb` | DroidSpaces arm64 Debian package |
+
+        The ReSukiSU APKs match the KernelSU driver in this build (version 35089,
+        UAPI 2). Other manager versions (rc2/rc3) use UAPI 4 and will show
+        "Kernel update required".
 
         ### DroidSpaces support
         This build includes full [DroidSpaces](https://github.com/ravindu644/Droidspaces-OSS)
@@ -211,4 +241,4 @@ jobs:
         gh release create "$tag" \
           --title "munch (Redmi K40S) — $tag" \
           --notes-file release-notes.md \
-          APTKernel_*.zip apk/*.apk
+          APTKernel_*.zip apk/*
