@@ -289,13 +289,17 @@ build_target() {
         # "mv kernels/Image Image" inside anykernel.sh fails silently and
         # flash_boot() re-packs the OLD kernel from the boot partition, so the
         # flashed kernel never actually changes. Point it at the real path.
-        sed -i "s#\$home/kernels/Image#\$home/kernels/${OS_TYPE}/Image#" anykernel/anykernel.sh
-        sed -i "s#\$home/kernels/dtb#\$home/kernels/${OS_TYPE}/dtb#" anykernel/anykernel.sh
+        # The pattern also matches an already-rewritten kernels/<os>/Image, so
+        # the second build (which reuses the same anykernel/ checkout) still
+        # gets corrected instead of failing the assertion below.
+        sed -i -E "s#home/kernels/([a-z0-9_]+/)?Image#home/kernels/${OS_TYPE}/Image#" anykernel/anykernel.sh
+        sed -i -E "s#home/kernels/([a-z0-9_]+/)?dtb#home/kernels/${OS_TYPE}/dtb#" anykernel/anykernel.sh
         if ! grep -q "kernels/${OS_TYPE}/Image" anykernel/anykernel.sh; then
             echo "[-] FATAL: failed to point anykernel.sh at kernels/${OS_TYPE}/Image;"
             echo "[-] the produced zip would silently keep the old kernel. Aborting."
             exit 1
         fi
+        grep -nE 'mv \$home/kernels/' anykernel/anykernel.sh
         
         # 确定 ZIP 文件名
         local KSU_ZIP_STR="NoKernelSU"
